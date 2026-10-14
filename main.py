@@ -13,6 +13,6 @@ while True:
         break
 
     again = input("\nPlay again? (y/n): ").lower()
-
+    
     if again != "y":
         break
