@@ -1,6 +1,8 @@
 import os
+import time
 from cards import new_deck, draw, show_cards, evaluate
 from ai import choose_action, choose_raise
+from recorder import start_hand, new_street, record_event, end_hand
 
 STARTING_CHIPS = 100
 ANTE = 5
@@ -27,6 +29,11 @@ def show_table():
     if table["board"]:
         print("Board:", show_cards(table["board"]))
     print("Your cards:", show_cards(table["cards"]))
+    if len(table["board"]) >= 3:
+        _, best_hand = evaluate(table["cards"], table["board"])
+        print("Your best hand:", best_hand)
+    else:
+        print("Your best hand: not determined until the flop")
     print(f"Pot: {table['pot']} | Your Chips: {table['player']} | AI Chips: {table['ai']}")
     print()
 
@@ -64,9 +71,15 @@ def betting_round():
         other = "ai" if who == "player" else "player"
         max_raise = max(0, min(table[who] - to_call, table[other]))
         
+        decision_time = None
+        acted_at = None
+        
         if who == "player":
             show_table()
+            start = time.time()
             action = get_action(to_call, max_raise)
+            acted_at = time.time()
+            decision_time = acted_at - start
             label = "You"
         else:
             action = choose_action(to_call, max_raise)
@@ -74,16 +87,19 @@ def betting_round():
             
         if action == "fold":
             say(f"{label} folded!")
+            record_event(f"{who}_action", "fold" , 0, decision_time, acted_at)
             return who
         
         elif action == "check":
             say(f"{label} checked.")
+            record_event(f"{who}_action", "check", 0, decision_time, acted_at)
             if not first:
                 break
         
         elif action == "call":
             pay(who, to_call)
             say(f"{label}: call {to_call}")
+            record_event(f"{who}_action", "call", to_call, decision_time, acted_at)
             return None
         
         elif action == "raise":
@@ -95,7 +111,7 @@ def betting_round():
             pay(who, to_call + raise_amount)
             to_call += raise_amount
             say(f"{label}: raise {raise_amount} (total to call: {to_call})")
-            
+            record_event(f"{who}_action", "raise", raise_amount, decision_time, acted_at)
         first = False
         who = other
         
@@ -113,6 +129,8 @@ def play_hand():
     table["board"] = []
     table["log"] = []
     
+    start_hand()
+    
     ante = min(ANTE, table["player"], table["ai"])
     pay("player", ante)
     pay("ai", ante)
@@ -120,6 +138,8 @@ def play_hand():
     for name, count in [("Preflop", 0), ("Flop", 3), ("Turn", 1), ("River", 1)]:
         table["board"] += draw(deck, count)
         say(f"--- {name} ---")
+        if count > 0:
+            new_street(name)
 
         #Skip betting if someone is all in
         if min(table["player"], table["ai"]) == 0:
@@ -131,6 +151,7 @@ def play_hand():
         if folder:
             winner = "ai" if folder == "player" else "player"
             give_pot(winner)
+            end_hand(table["cards"], ai_cards, table["board"], winner, "fold")
             show_table()
             return
 
@@ -145,14 +166,18 @@ def play_hand():
     say(f"AI hand: {ai_hand}")
 
     if player_score < ai_score:
+        winner = "player"
         give_pot("player")
     elif player_score > ai_score:
+        winner = "ai"
         give_pot("ai")
     else:
+        winner = ("tie")
         say("Tie! Pot is split")
         half = table["pot"] // 2
         table["player"] += half
         table["ai"] += table["pot"] - half
         table["pot"] = 0
-
+        
+    end_hand(table["cards"], ai_cards, table["board"], winner, "showdown")
     show_table()

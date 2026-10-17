@@ -1,5 +1,7 @@
 from game import play_hand, table
+from recorder import start_camera
 
+start_camera()
 
 while True:
     play_hand()

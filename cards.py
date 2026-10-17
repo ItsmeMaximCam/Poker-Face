@@ -15,6 +15,9 @@ RANK_NAMES = {
     9: "High Card"
 }
 
+def plain_cards(cards):
+    return " ".join(Card.int_to_str(card) for card in cards)
+
 def new_deck():
     return Deck()
 
